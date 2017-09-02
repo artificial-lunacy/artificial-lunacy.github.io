@@ -31,60 +31,29 @@ youtube-dl "ytsearch:GTA V"
 ```
 
 
-Both ``ffmpeg`` and ``youtube-dl`` has Python API and we can use them inside our application. See [here](https://pypi.python.org/pypi/ffmpy) and [here](https://github.com/rg3/youtube-dl/blob/master/README.md#embedding-youtube-dl) for more details.
-
-
-
+Both ``ffmpeg`` and ``youtube-dl`` has Python API and we can use them inside our application. See [here](https://pypi.python.org/pypi/ffmpy) and [here](https://github.com/rg3/youtube-dl/blob/master/README.md#embedding-youtube-dl) for more details. Here is a simple Python script that will search youtube for a given query and will extract `duration/sample_rate` frames from each search result.
 
 ```python
-import argparse
 import youtube_dl
 import ffmpy
-import os
 
 sample_rate = 5
-game_dic = {}
-video_per_game = 3
+search_query = "GTA V"
+results_per_query = 3
 
-def save_frame(url, time, game):
-    output_file = os.path.join(game, game + '-' + str(game_dic[game]) + '.jpg')
-    ff = ffmpy.FFmpeg(
-        inputs={url: '-ss ' + str(time) + ' -t 1'},
-        outputs={output_file: '-f mjpeg'})
-    ff.run()
-    game_dic[game] += 1
+ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s%(ext)s'})
+search_results = ydl.extract_info("ytsearch{}:{}".format(results_per_query, search_query), download=False)
 
-def search_and_extract(query, game_name, rate):
-    print('Processing links for: {}'.format(game_name))
-    ydl = youtube_dl.YoutubeDL({'outtmpl': '%(id)s%(ext)s'})
-    with ydl:
-        result = ydl.extract_info('ytsearch' + str(video_per_game) + ':' + str(query), download=False)
-    
-    if not os.path.exists(game_name):
-        os.makedirs(game_name)
+for idx, game_video in enumerate(search_results['entries']):
+    video_link = game_video['formats'][-1]['url']
+    duration = game_video['duration']
 
-    for game_video in result['entries']:
-        video_link = game_video['formats'][-1]['url']
-        duration = game_video['duration']
-
-        for i in range(1, duration, int(duration/rate)):
-            save_frame(video_link, i, game_name)
-
-
-parser = argparse.ArgumentParser(description='download pile of videos from youtube')
-parser.add_argument('--file', dest='file', action='store', required=True)
-args = parser.parse_args()
-
-with open(args.file) as f:
-    content = f.readlines()
-
-for line in content:
-    game_name, search_query = str(line).strip().split(', ')
-
-    if game_name not in game_dic.keys():
-        game_dic[game_name] = 0
-
-    if search_query is not "":
-        search_and_extract(search_query, game_name, sample_rate)
-
+    for time in range(1, duration, int(duration/sample_rate)):
+        output_file = '{}-{}-{}.jpg'.format(search_query, idx, time)
+        ff = ffmpy.FFmpeg(
+            inputs={video_link: '-ss ' + str(time) + ' -t 1'},
+            outputs={output_file: '-f mjpeg'})
+        ff.run()
 ```
+
+The one big problem with this method is that you have to check every single frame to make sure that it actually belongs to a game, not a movie! for example, if your search query only contains  ['Volume'](http://store.steampowered.com/app/365770/Volume/), there is a high chance that all of the search results are related to the movie ['Volume'](http://www.imdb.com/title/tt2215741/). Of course, you can use some search tricks to clean up the results but IMO Twitch is a better source to excavating.
